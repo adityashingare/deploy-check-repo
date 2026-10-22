@@ -1,12 +1,45 @@
 # BLFA Learning Lab — WordPress Backend (Headless CMS)
 
-Containerized Headless WordPress CMS environment orchestrated with Docker Compose, featuring **Nginx reverse proxy**, **WordPress PHP 8.2-FPM**, and **MySQL 8.0**.
+A containerized Headless WordPress CMS environment orchestrated with Docker Compose, featuring **Nginx reverse proxy**, **WordPress PHP 8.2-FPM**, and **MySQL 8.0**.
 
 > **Crucial Architecture Rule**: The backend strictly avoids custom Dockerfiles! All services run directly on official, unmodified, upstream container images (`wordpress:php8.2-fpm-alpine`, `nginx:1.27-alpine`, `mysql:8.0`).
 
 ---
 
-## 1. Services & Architecture Overview
+## 1. Project Overview & Repository Structure
+
+The BLFA Learning Lab uses **ONE Git repository with TWO long-lived branches**:
+
+```
+                       ┌── [frontend branch]  ── Next.js App, Dockerfile, Compose, Frontend CI
+[Initial Git Commit]  ─┤
+                       └── [backend branch]   ── WordPress PHP-FPM, Nginx, MySQL 8, Backend CI
+```
+
+- **`backend` branch**: Contains the Headless WordPress configuration, Nginx reverse proxy, MySQL 8 database, automated provisioning scripts, and `backend-ci.yml`.
+- **`frontend` branch**: Contains the Next.js 14 application, multi-stage production `Dockerfile`, frontend `docker-compose.yml`, and `frontend-ci.yml`.
+- **Concurrent Development**: Developers maintain both branches side-by-side using **Git Worktrees** (`git worktree add ..\blfa-backend backend`) or detached background Docker containers.
+
+---
+
+## 2. Documentation Deliverables Index
+
+Every architectural dimension and operation is comprehensively documented in the `docs/` directory:
+
+| Documentation Guide | Primary Topics Covered |
+| :--- | :--- |
+| **[Local Setup & Quickstart Guide](docs/LOCAL_SETUP.md)** | Step-by-step local provisioning for Windows with Git & Docker Desktop. |
+| **[Docker Concepts & Architecture](docs/DOCKER_CONCEPTS.md)** | Dockerfile vs. Compose, Image vs. Container, and why no custom backend Dockerfile is used. |
+| **[Local Networking & URL Architecture](docs/NETWORKING.md)** | Bridge network `blfa-network`, browser-facing URLs vs. internal container service discovery (`http://nginx/graphql`). |
+| **[Environment Variables Reference](docs/ENV_VARS.md)** | Complete specification of frontend and backend variables, security rules, and build-time vs. runtime behaviors. |
+| **[Nginx Routing Guide](docs/NGINX_ROUTING.md)** | Reverse proxy configuration, FastCGI PHP pass (`wordpress:9000`), static caching, and `/healthz`. |
+| **[Git Branch & Worktree Management](docs/GIT_BRANCHES.md)** | Maintaining two separate branches in one repository, safe branch switching, and Git worktrees. |
+| **[GitHub Actions CI Guide](docs/CI_GUIDE.md)** | Frontend and backend CI pipelines, least privilege permissions, and local validation. |
+| **[Troubleshooting & Operations Guide](docs/TROUBLESHOOTING.md)** | Exact diagnostic commands, fixing 403, 404, 502, 503, database resets, and log inspection. |
+
+---
+
+## 3. Backend Services & Volume Architecture
 
 | Service | Container Name | Base Image | Role | Port(s) |
 | :--- | :--- | :--- | :--- | :--- |
@@ -15,25 +48,18 @@ Containerized Headless WordPress CMS environment orchestrated with Docker Compos
 | **`db`** | `blfa-mysql` | `mysql:8.0` | Relational database with persistent named volume. | Internal `3306` |
 | **`wp-cli`** | `blfa-wp-cli` | `wordpress:cli-php8.2` | Automated management utility tool profile. | N/A (Utility) |
 
----
-
-## 2. Shared Volumes & Data Persistence
-
-1. **`blfa_wp_data` (`/var/www/html`)**:
-   - Shared between `wordpress` (read-write) and `nginx` (read-only).
-   - On initial container launch, the official WordPress entrypoint automatically extracts WordPress core files into this volume.
-   - Houses WordPress core, uploads, themes, and plugins (including `wp-graphql`).
-2. **`blfa_db_data` (`/var/lib/mysql`)**:
-   - Persists MySQL tables and database indexes across container restarts and updates.
+### Shared Volumes:
+1. **`blfa_wp_data` (`/var/www/html`)**: Shared between `wordpress` (read-write) and `nginx` (read-only) for core files, plugins, and media uploads.
+2. **`blfa_db_data` (`/var/lib/mysql`)**: Persistent MySQL data storage.
 
 ---
 
-## 3. Quickstart: Automated Setup
+## 4. Quickstart: Automated Setup
 
 On Windows PowerShell:
 
 ```powershell
-# 1. Run the all-in-one setup script:
+# Run the all-in-one setup script:
 .\scripts\setup-backend.ps1
 ```
 
@@ -42,103 +68,12 @@ Or on Linux / macOS / WSL:
 ./scripts/setup-backend.sh
 ```
 
-This script:
-- Creates `.env` from `.env.example`
-- Starts containers in detached mode (`docker compose up -d`)
-- Waits for MySQL database health check to report healthy
-- Installs WordPress core with local credentials
-- Sets rewrite structure to `/%postname%/` (required by WPGraphQL)
-- Installs and activates the **WPGraphQL** plugin
-- Seeds initial sample blog posts
-
 ---
 
-## 4. Manual Setup via WP-CLI
+## 5. Endpoints & Verifications
 
-If you prefer executing steps manually:
-
-```bash
-# 1. Start containers
-docker compose up -d
-
-# 2. Wait for MySQL to become healthy (check with docker compose ps)
-docker compose ps
-
-# 3. Install WordPress
-docker compose run --rm wp-cli wp core install \
-  --url="http://localhost:9000" \
-  --title="BLFA Headless CMS" \
-  --admin_user="admin" \
-  --admin_password="admin_local_pass123!" \
-  --admin_email="admin@example.com" \
-  --skip-email
-
-# 4. Set permalink structure
-docker compose run --rm wp-cli wp rewrite structure '/%postname%/' --hard
-
-# 5. Install and activate WPGraphQL
-docker compose run --rm wp-cli wp plugin install wp-graphql --activate
-```
-
----
-
-## 5. Verifying the Endpoints
-
-### A. Nginx Health Check
-```bash
-curl -i http://localhost:9000/healthz
-```
-*Expected: HTTP 200 OK with `healthy` body.*
-
-### B. WPGraphQL Query Verification
-```bash
-curl -X POST http://localhost:9000/graphql \
-  -H "Content-Type: application/json" \
-  -d '{"query":"{ generalSettings { title url } posts { nodes { title slug } } }"}'
-```
-
-*Expected Response:*
-```json
-{
-  "data": {
-    "generalSettings": {
-      "title": "BLFA Headless WordPress",
-      "url": "http://localhost:9000"
-    },
-    "posts": {
-      "nodes": [
-        {
-          "title": "Architecting Next.js with Headless WordPress",
-          "slug": "architecting-next-js-with-headless-wordpress"
-        }
-      ]
-    }
-  }
-}
-```
-
-### C. WordPress Admin Dashboard
-- **URL**: [http://localhost:9000/wp-admin](http://localhost:9000/wp-admin)
-- **Username**: `admin`
-- **Password**: `admin_local_pass123!`
-
----
-
-## 6. Daily Operations & Troubleshooting
-
-```bash
-# View live container logs
-docker compose logs -f
-
-# Check container status
-docker compose ps
-
-# Validate Nginx configuration
-docker compose exec nginx nginx -t
-
-# Stop all backend services
-docker compose down
-
-# Complete database reset (destroys data volume for fresh start)
-docker compose down -v
-```
+- **WordPress Admin**: [http://localhost:9000/wp-admin](http://localhost:9000/wp-admin) (`admin` / `admin_local_pass123!`)
+- **WPGraphQL Endpoint**: [http://localhost:9000/graphql](http://localhost:9000/graphql)
+- **Nginx Health Check**: [http://localhost:9000/healthz](http://localhost:9000/healthz)
+- **Validate Nginx Configuration**: `docker compose exec nginx nginx -t`
+- **Validate Compose Specification**: `docker compose config --quiet`
