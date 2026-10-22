@@ -1,14 +1,47 @@
-# BLFA Learning Lab — Next.js Frontend
+# BLFA Learning Lab — Next.js + Headless WordPress with Docker
 
-Containerized Next.js frontend built with React 18, App Router, and TypeScript. Designed to serve as a decoupled presentation layer communicating with a headless WordPress CMS backend via **WPGraphQL**.
+A comprehensive, production-grade local development environment replicating the decoupled microservices architecture of the client's BLFA website.
 
 ---
 
-## Architecture Overview
+## 1. Project Overview & Repository Structure
+
+The BLFA Learning Lab uses **ONE Git repository with TWO long-lived branches**:
+
+```
+                       ┌── [frontend branch]  ── Next.js App, Dockerfile, Compose, Frontend CI
+[Initial Git Commit]  ─┤
+                       └── [backend branch]   ── WordPress PHP-FPM, Nginx, MySQL 8, Backend CI
+```
+
+- **`frontend` branch**: Contains the Next.js 14 application, multi-stage production `Dockerfile`, frontend `docker-compose.yml`, and `frontend-ci.yml`.
+- **`backend` branch**: Contains the Headless WordPress configuration, Nginx reverse proxy, MySQL 8 database, automated provisioning scripts, and `backend-ci.yml`. **Strictly requires ZERO custom WordPress Dockerfiles.**
+- **Concurrent Development**: Developers maintain both branches side-by-side using **Git Worktrees** (`git worktree add ..\blfa-backend backend`) or detached background Docker containers.
+
+---
+
+## 2. Documentation Deliverables Index
+
+Every architectural dimension and operation is comprehensively documented in the `docs/` directory:
+
+| Documentation Guide | Primary Topics Covered |
+| :--- | :--- |
+| **[Local Setup & Quickstart Guide](docs/LOCAL_SETUP.md)** | Step-by-step local provisioning for Windows with Git & Docker Desktop. |
+| **[Docker Concepts & Architecture](docs/DOCKER_CONCEPTS.md)** | Dockerfile vs. Compose, Image vs. Container, and why no custom backend Dockerfile is used. |
+| **[Local Networking & URL Architecture](docs/NETWORKING.md)** | Bridge network `blfa-network`, browser-facing URLs vs. internal container service discovery (`http://nginx/graphql`). |
+| **[Environment Variables Reference](docs/ENV_VARS.md)** | Complete specification of frontend and backend variables, security rules, and build-time vs. runtime behaviors. |
+| **[Nginx Routing Guide](docs/NGINX_ROUTING.md)** | Reverse proxy configuration, FastCGI PHP pass (`wordpress:9000`), static caching, and `/healthz`. |
+| **[Git Branch & Worktree Management](docs/GIT_BRANCHES.md)** | Maintaining two separate branches in one repository, safe branch switching, and Git worktrees. |
+| **[GitHub Actions CI Guide](docs/CI_GUIDE.md)** | Frontend and backend CI pipelines, least privilege permissions, and local validation. |
+| **[Troubleshooting & Operations Guide](docs/TROUBLESHOOTING.md)** | Exact diagnostic commands, fixing 403, 404, 502, 503, database resets, and log inspection. |
+
+---
+
+## 3. Frontend Architecture Highlights
 
 - **Framework**: Next.js 14 (App Router)
 - **Language**: TypeScript
-- **Styling**: Vanilla CSS Design System with responsive grid, glassmorphic accents, and micro-interactions
+- **Styling**: Tailored Vanilla CSS Design System with responsive grid, glassmorphic cards, and micro-interactions
 - **Containerization**: Multi-stage production `Dockerfile` (Alpine Linux, non-root user `nextjs:nodejs`, standalone output)
 - **Data Layer**: GraphQL queries against WPGraphQL with automatic fallback caching for offline resilience
 - **Endpoints**:
@@ -21,75 +54,23 @@ Containerized Next.js frontend built with React 18, App Router, and TypeScript. 
 
 ---
 
-## Local Development (Without Docker)
+## 4. Local Quickstart (Frontend)
 
-If you have Node.js 20+ installed on your host machine:
-
+### Running with Docker Compose
 ```bash
-# 1. Install dependencies
+# Attach to the shared Docker network 'blfa-network':
+docker compose up --build -d
+
+# Check health and status:
+docker compose ps
+curl http://localhost:3000/api/health
+```
+
+### Running Locally on Host (Node 20+)
+```bash
 npm ci
-
-# 2. Configure environment
 cp .env.example .env.local
-
-# 3. Start development server
 npm run dev
 ```
 
 Visit [http://localhost:3000](http://localhost:3000) in your browser.
-
----
-
-## Running with Docker Compose
-
-The frontend attaches to the shared Docker bridge network `blfa-network`.
-
-```bash
-# 1. Ensure the shared Docker network exists (created automatically by backend compose, or run manually):
-docker network create blfa-network
-
-# 2. Build and start the container in detached mode:
-docker compose up --build -d
-
-# 3. Inspect container logs:
-docker compose logs -f frontend
-
-# 4. Check health status:
-docker compose ps
-curl http://localhost:3000/api/health
-
-# 5. Stop the container:
-docker compose down
-```
-
----
-
-## Environment Variables Reference
-
-| Variable Name | Required At | Default Value | Description |
-| :--- | :--- | :--- | :--- |
-| `NEXT_PUBLIC_WORDPRESS_API_URL` | Build & Runtime | `http://localhost:9000/graphql` | Browser-accessible GraphQL endpoint embedded into client JavaScript bundles. |
-| `WORDPRESS_INTERNAL_API_URL` | Runtime (SSR) | `http://nginx/graphql` | Internal Docker network URL used by Next.js Server Components to reach Nginx directly. |
-| `PORT` | Runtime | `3000` | Host port on which Next.js listens. |
-| `NODE_ENV` | Build & Runtime | `production` | Node execution environment. |
-
-> **Important**: Never store sensitive database passwords or API keys in variables prefixed with `NEXT_PUBLIC_` or pass them as Docker build arguments.
-
----
-
-## Multi-Stage Dockerfile Highlights
-
-The frontend `Dockerfile` follows enterprise Docker best practices:
-1. **`deps` stage**: Uses `node:20-alpine` and `npm ci` with `package-lock.json` for deterministic, cached dependency installation.
-2. **`builder` stage**: Compiles the Next.js app using `output: 'standalone'`, creating a self-contained runtime package with minimal dependencies.
-3. **`runner` stage**: Runs as unprivileged user `nextjs` (UID 1001), exposes port 3000, and defines a `HEALTHCHECK` command.
-
----
-
-## Continuous Integration (CI)
-
-The GitHub Actions workflow (`.github/workflows/frontend-ci.yml`) triggers on pushes and pull requests to the `frontend` branch. It executes:
-- Dependency installation (`npm ci`)
-- Code linting (`npm run lint`)
-- Application compilation (`npm run build`)
-- Production Docker image build validation (`docker build`)
