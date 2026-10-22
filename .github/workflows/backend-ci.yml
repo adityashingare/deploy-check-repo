@@ -21,19 +21,32 @@ jobs:
       - name: Check out backend repository
         uses: actions/checkout@v4
 
+      - name: Prepare environment configuration
+        run: |
+          cp .env.example .env
+
       - name: Validate Docker Compose Configuration Syntax
         run: |
           docker compose config --quiet
 
-      - name: Validate Nginx Virtual Host Configuration
+      - name: Validate Nginx Virtual Host Configuration Syntax
         run: |
           docker run --rm \
+            --add-host wordpress:127.0.0.1 \
             -v ${{ github.workspace }}/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro \
             nginx:1.27-alpine nginx -t
 
-      - name: Pull and verify official container images
+      - name: Start backend Compose services
         run: |
-          docker pull mysql:8.0
-          docker pull wordpress:php8.2-fpm-alpine
-          docker pull nginx:1.27-alpine
-          docker pull wordpress:cli-php8.2
+          docker compose up -d
+
+      - name: Verify Live Nginx Configuration & Health Check
+        run: |
+          sleep 5
+          docker compose exec nginx nginx -t
+          curl --fail --retry 5 --retry-delay 3 http://localhost:9000/healthz
+
+      - name: Clean up Compose stack
+        if: always()
+        run: |
+          docker compose down -v
