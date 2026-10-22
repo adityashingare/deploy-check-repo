@@ -6,8 +6,6 @@
 # the backend Compose project or via `docker network create blfa-network`.
 # ==============================================================================
 
-version: "3.8"
-
 services:
   frontend:
     build:
@@ -32,7 +30,7 @@ services:
     networks:
       - blfa-network
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/api/health"]
       interval: 15s
       timeout: 5s
       retries: 3
