@@ -1,13 +1,7 @@
-<#
-.SYNOPSIS
-    Automated initialization of BLFA Headless WordPress & WPGraphQL on Windows.
-.DESCRIPTION
-    Installs WordPress core via WP-CLI, configures pretty permalinks,
-    installs and activates the WPGraphQL plugin, and seeds demo articles.
-#>
+# BLFA Learning Lab — Backend Automated Provisioning (PowerShell)
 
 Write-Host "==========================================================" -ForegroundColor Cyan
-Write-Host "  BLFA Learning Lab — Backend Automated Provisioning     " -ForegroundColor Cyan
+Write-Host "  BLFA Learning Lab - Backend Automated Provisioning     " -ForegroundColor Cyan
 Write-Host "==========================================================" -ForegroundColor Cyan
 
 # 1. Ensure .env exists
@@ -22,7 +16,7 @@ if (-not (Test-Path ".env")) {
 Write-Host "[2/6] Starting Docker Compose backend services..." -ForegroundColor Yellow
 docker compose up -d
 
-Write-Host "[3/6] Waiting for MySQL and WordPress to initialize..." -ForegroundColor Yellow
+Write-Host "[3/6] Waiting for MySQL database to become healthy..." -ForegroundColor Yellow
 $maxAttempts = 30
 $attempt = 0
 $healthy = $false
@@ -47,16 +41,10 @@ if (-not $healthy) {
 
 # 4. Install WordPress Core (if not already installed)
 Write-Host "[4/6] Verifying WordPress Core installation..." -ForegroundColor Yellow
-$isInstalled = docker compose run --rm wp-cli wp core is-installed 2>&1
+$null = docker compose run --rm wp-cli wp core is-installed 2>&1
 if ($LASTEXITCODE -ne 0) {
     Write-Host " -> Installing WordPress core with local credentials..." -ForegroundColor Yellow
-    docker compose run --rm wp-cli wp core install `
-        --url="http://localhost:9000" `
-        --title="BLFA Headless WordPress" `
-        --admin_user="admin" `
-        --admin_password="admin_local_pass123!" `
-        --admin_email="admin@example.com" `
-        --skip-email
+    docker compose run --rm wp-cli wp core install --url="http://localhost:9000" --title="BLFA Headless WordPress" --admin_user="admin" --admin_password="admin_local_pass123!" --admin_email="admin@example.com" --skip-email
     Write-Host " -> WordPress core installed successfully!" -ForegroundColor Green
 } else {
     Write-Host " -> WordPress core is already installed." -ForegroundColor Green
@@ -71,26 +59,17 @@ Write-Host "[6/6] Installing and activating WPGraphQL..." -ForegroundColor Yello
 docker compose run --rm wp-cli wp plugin install wp-graphql --activate
 
 # Seed initial blog posts if none exist
-$postCount = docker compose run --rm wp-cli wp post list --post_type=post --format=count
-if ([int]$postCount -le 1) {
+$postCount = docker compose run --rm wp-cli wp post list --post_type=post --format=count 2>$null
+if (-not $postCount -or [int]$postCount -le 1) {
     Write-Host " -> Seeding BLFA sample posts..." -ForegroundColor Yellow
     
-    docker compose run --rm wp-cli wp post create `
-        --post_type=post `
-        --post_title="Architecting Next.js with Headless WordPress" `
-        --post_content="This blog post was dynamically generated in WordPress and retrieved by the Next.js frontend over WPGraphQL! Our containerized architecture separates concerns cleanly between presentation and content authoring." `
-        --post_excerpt="Discover the decoupled architecture of BLFA using Next.js, Headless WordPress, and Docker." `
-        --post_status=publish
+    docker compose run --rm wp-cli wp post create --post_type=post --post_title="Architecting Next.js with Headless WordPress" --post_content="This blog post was dynamically generated in WordPress and retrieved by the Next.js frontend over WPGraphQL! Our containerized architecture separates concerns cleanly between presentation and content authoring." --post_excerpt="Discover the decoupled architecture of BLFA using Next.js, Headless WordPress, and Docker." --post_status=publish
 
-    docker compose run --rm wp-cli wp post create `
-        --post_type=post `
-        --post_title="Overcoming Docker Networking in Local Microservices" `
-        --post_content="When developing microservices locally, understanding the distinction between internal container DNS (http://nginx/graphql) and host-facing browser URLs (http://localhost:9000/graphql) is paramount for seamless SSR." `
-        --post_excerpt="A deep dive into Docker bridge networking and client/server URL resolution." `
-        --post_status=publish
+    docker compose run --rm wp-cli wp post create --post_type=post --post_title="Overcoming Docker Networking in Local Microservices" --post_content="When developing microservices locally, understanding the distinction between internal container DNS (http://nginx/graphql) and host-facing browser URLs (http://localhost:9000/graphql) is paramount for seamless SSR." --post_excerpt="A deep dive into Docker bridge networking and client/server URL resolution." --post_status=publish
 }
 
-Write-Host "`n==========================================================" -ForegroundColor Green
+Write-Host ""
+Write-Host "==========================================================" -ForegroundColor Green
 Write-Host "  BLFA Backend Setup Complete!                            " -ForegroundColor Green
 Write-Host "==========================================================" -ForegroundColor Green
 Write-Host "  WordPress Admin:  http://localhost:9000/wp-admin"

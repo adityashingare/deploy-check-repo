@@ -5,8 +5,6 @@
 # Strictly conforms to the requirement of ZERO custom backend Dockerfiles.
 # ==============================================================================
 
-version: "3.8"
-
 services:
   # ----------------------------------------------------------------------------
   # 1. MySQL 8.0 Relational Database
@@ -79,7 +77,7 @@ services:
     networks:
       - blfa-network
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/healthz"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1/healthz"]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -93,7 +91,6 @@ services:
   wp-cli:
     image: wordpress:cli-php8.2
     container_name: blfa-wp-cli
-    user: "33:33" # Run as www-data user to preserve correct file permissions
     volumes:
       - wp_data:/var/www/html
     environment:
