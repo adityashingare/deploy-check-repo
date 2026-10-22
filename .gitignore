@@ -1,0 +1,21 @@
+# Environment variables
+.env
+.env*.local
+
+# System & IDE files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.sw?
+
+# Temporary files & logs
+*.log
+scratch/
+
+# Ignore leftover frontend build artifacts if switching branches on host
+.next/
+node_modules/
+
+# Worktrees directory if created inside workspace
+.worktrees/
